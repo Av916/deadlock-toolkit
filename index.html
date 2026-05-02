@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deadlock Detection & Recovery Toolkit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #080a0f;
+  --bg2:     #0e1118;
+  --bg3:     #141820;
+  --bg4:     #1c2130;
+  --border:  #1f2736;
+  --border2: #2a3447;
+  --text:    #dde4f0;
+  --muted:   #5a6880;
+  --muted2:  #8494aa;
+  --accent:  #5b7fff;
+  --accent2: #8b6fff;
+  --green:   #00e5a0;
+  --red:     #ff4d6a;
+  --yellow:  #ffca28;
+  --cyan:    #00cfff;
+  --orange:  #ff8c42;
+  --pink:    #ff6eb4;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ══════════════════════════════════════════════════════
+   HEADER
+══════════════════════════════════════════════════════ */
+.header {
+  position: relative;
+  padding: 28px 36px 22px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  background: linear-gradient(180deg, #0b0f1a 0%, var(--bg) 100%);
+}
+
+.header-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 600px 300px at 10% 50%, rgba(91,127,255,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 400px 200px at 80% 20%, rgba(139,111,255,0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.header-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.header-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.header-left {}
+
+.header-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-eyebrow::before {
+  content: '';
+  width: 24px; height: 1px;
+  background: var(--accent);
+}
+
+.header-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.header-title span {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted2);
+  margin-top: 8px;
+}
+
+.badge-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: 1px solid;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.b-blue   { color: var(--accent);  border-color: rgba(91,127,255,0.3);  background: rgba(91,127,255,0.08); }
+.b-purple { color: var(--accent2); border-color: rgba(139,111,255,0.3); background: rgba(139,111,255,0.08); }
+.b-green  { color: var(--green);   border-color: rgba(0,229,160,0.3);   background: rgba(0,229,160,0.08); }
+.b-red    { color: var(--red);     border-color: rgba(255,77,106,0.3);  background: rgba(255,77,106,0.08); }
+.b-yellow { color: var(--yellow);  border-color: rgba(255,202,40,0.3);  background: rgba(255,202,40,0.08); }
+.b-cyan   { color: var(--cyan);    border-color: rgba(0,207,255,0.3);   background: rgba(0,207,255,0.08); }
+
+.header-stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  text-align: right;
+}
+
+.stat-num {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  font-family: var(--mono);
+}
+
+/* ══════════════════════════════════════════════════════
+   NAV
+══════════════════════════════════════════════════════ */
+.nav {
+  display: flex;
+  gap: 0;
+  padding: 0 36px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.nav-btn {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 14px 18px;
+  border: none;
+  cursor: pointer;
+  color: var(--muted2);
+  background: transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+  position: relative;
+  letter-spacing: 0.3px;
+}
+
+.nav-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.2s;
+}
+
+.nav-btn:hover { color: var(--text); }
+.nav-btn.active { color: #fff; }
+.nav-btn.active::after { transform: scaleX(1); }
+
+/* ══════════════════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════════════════ */
+.main { padding: 28px 36px; }
+
+.section { display: none; }
+.section.active { display: block; }
+
+/* ══════════════════════════════════════════════════════
+   COMMON COMPONENTS
+══════════════════════════════════════════════════════ */
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.sh-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.sh-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ct-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.card-body {
+  font-size: 12px;
+  color: var(--muted2);
+  line-height: 1.75;
+}
+
+/* ══════════════════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════════════════ */
+.btn {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: #4a6ee8; transform: translateY(-1px); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--muted2);
+  border: 1px solid var(--border2);
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-danger {
+  background: rgba(255,77,106,0.1);
+  color: var(--red);
+  border: 1px solid rgba(255,77,106,0.25);
+}
+.btn-danger:hover { background: rgba(255,77,106,0.18); }
+
+.btn-sm { padding: 5px 12px; font-size: 10px; }
+
+/* ══════════════════════════════════════════════════════
+   LOG BOX
+══════════════════════════════════════════════════════ */
+.log-box {
+  background: #05070b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.log-header {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.log-pulse {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: blink 1.4s infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+.log-body {
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.9;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.l-info   { color: var(--cyan); }
+.l-warn   { color: var(--yellow); }
+.l-error  { color: var(--red); }
+.l-ok     { color: var(--green); }
+.l-muted  { color: var(--muted2); }
+.l-accent { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════
+   ── THEORY SECTION ──
+══════════════════════════════════════════════════════ */
+.theory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.coffman-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.cond-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.cond-card:hover { border-color: var(--border2); }
+
+.cond-num {
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--border2);
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.cond-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.cond-desc {
+  font-size: 11px;
+  color: var(--muted2);
+  line-height: 1.65;
+}
+
+.cond-tag {
+  margin-top: 10px;
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.compare-table th {
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.compare-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted2);
+  vertical-align: middle;
+}
+
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+.compare-table td:first-child { color: var(--text); font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════
+   ── RAG SECTION ──
+══════════════════════════════════════════════════════ */
+.rag-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+}
+
+.canvas-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.canvas-toolbar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tb-sep {
+  width: 1px; height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.tb-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.tb-btn {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--muted2);
+  background: var(--bg3);
+  transition: all 0.12s;
+  letter-spacing: 0.3px;
+}
+
+.tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tb-btn.active { background: rgba(91,127,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+#ragCanvas {
+  display: block;
+  cursor: default;
+}
+
+.legend-row {
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted2);
+}
+
+.leg-circle {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2px solid;
+}
+
+.leg-rect {
+  width: 12px; height: 10px;
+  border-radius: 2px;
+  border: 2px solid;
+}
+
+.leg-line {
+  width: 18px; height: 0;
+  border-top: 2px dashed;
+}
+
+.rag-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.state-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.state-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.state-row:last-child { border-bottom: none; }
+.state-key { color: var(--muted); }
+.state-val { color: var(--text); }
+
+/* ══════════════════════════════════════════════════════
+   ── BANKER SECTION ──
+══════════════════════════════════════════════════════ */
+.banker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.matrix-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.matrix-header {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+table.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.matrix th {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  padding: 6px 0;
+  text-align: center;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+
+.matrix td {
+  text-align: center;
+  padding: 7px 4px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+
+.matrix tr:last-child td { border-bottom: none; }
+.matrix td.proc-id { color: var(--accent); font-size: 10px; padding-left: 12px; text-align: left; }
+.matrix td.hl-green { color: var(--green); background: rgba(0,229,160,0.07); }
+.matrix td.hl-red   { color: var(--red);   background: rgba(255,77,106,0.07); }
+.matrix td.hl-yellow{ color: var(--yellow);background: rgba(255,202,40,0.07); }
+
+.avail-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.avail-chip {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  text-align: center;
+}
+
+.avail-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.safe-result {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.safe-sequence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  min-height: 36px;
+}
+
+.seq-pill {
+  padding: 6px 14px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0,229,160,0.1);
+  border: 1px solid rgba(0,229,160,0.25);
+  color: var(--green);
+  animation: popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275) forwards;
+  opacity: 0;
+}
+
+@keyframes popIn {
+  from { opacity:0; transform: scale(0.7); }
+  to   { opacity:1; transform: scale(1); }
+}
+
+.seq-arrow { color: var(--muted); font-size: 13px; }
+
+.step-log {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 2;
+  max-height: 160px;
+  overflow-y: auto;
+  color: var(--muted2);
+}
+
+.step-log .step-run { color: var(--cyan); }
+.step-log .step-ok  { color: var(--green); }
+.step-log .step-bad { color: var(--red); }
+
+/* ══════════════════════════════════════════════════════
+   ── DETECTION SECTION ──
+══════════════════════════════════════════════════════ */
+.detection-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.code-block {
+  background: #030508;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.code-top {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.code-dots { display: flex; gap: 5px; }
+.cd { width: 10px; height: 10px; border-radius: 50%; }
+.cd-r { background: #ff5f57; }
+.cd-y { background: #ffbd2e; }
+.cd-g { background: #28c840; }
+
+.code-filename {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.code-complexity {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--yellow);
+  background: rgba(255,202,40,0.08);
+  border: 1px solid rgba(255,202,40,0.2);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+pre.code-body {
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.85;
+  overflow-x: auto;
+  color: #c9d1d9;
+}
+
+.kw  { color: #ff7b72; }
+.fn  { color: #d2a8ff; }
+.cm  { color: #4d5d6e; font-style: italic; }
+.st  { color: #a5d6ff; }
+.nm  { color: #79c0ff; }
+.cl  { color: #ffa657; }
+.op  { color: #ff7b72; }
+
+.complexity-table {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+/* ══════════════════════════════════════════════════════
+   ── RECOVERY SECTION ──
+══════════════════════════════════════════════════════ */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.strat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+
+.strat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+
+.strat-card:hover::before { opacity: 1; }
+.strat-card.selected { border-color: var(--accent); }
+
+.sc-kill::before     { background: rgba(255,77,106,0.04); }
+.sc-preempt::before  { background: rgba(255,202,40,0.04); }
+.sc-rollback::before { background: rgba(0,207,255,0.04); }
+.sc-waitdie::before  { background: rgba(0,229,160,0.04); }
+.sc-wound::before    { background: rgba(255,140,66,0.04); }
+.sc-priority::before { background: rgba(91,127,255,0.04); }
+.sc-one::before      { background: rgba(255,110,180,0.04); }
+.sc-combined::before { background: rgba(139,111,255,0.04); }
+
+.sc-icon { font-size: 20px; margin-bottom: 8px; line-height: 1; }
+.sc-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 5px;
+  line-height: 1.3;
+}
+
+.sc-desc {
+  font-size: 10px;
+  color: var(--muted2);
+  line-height: 1.5;
+}
+
+.sc-badge {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+.sim-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.proc-table {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.proc-row {
+  display: flex;
+  align-items: center;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  transition: background 0.25s;
+}
+
+.proc-row:last-child { border-bottom: none; }
+
+.pr-id { color: var(--accent); font-weight: 600; min-width: 24px; }
+.pr-name { flex: 1; color: var(--text); font-size: 10px; }
+
+.pr-hold { color: var(--muted); font-size: 9px; min-width: 60px; }
+.pr-want { color: var(--muted); font-size: 9px; min-width: 60px; }
+
+.pr-status {
+  font-size: 8px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.ps-running { background: rgba(0,229,160,0.1);   color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+.ps-blocked { background: rgba(255,77,106,0.1);   color: var(--red);   border: 1px solid rgba(255,77,106,0.2); }
+.ps-killed  { background: rgba(90,104,128,0.1);   color: var(--muted); border: 1px solid rgba(90,104,128,0.2); opacity: 0.6; }
+.ps-waiting { background: rgba(255,202,40,0.1);   color: var(--yellow);border: 1px solid rgba(255,202,40,0.2); }
+
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ══════════════════════════════════════════════════════
+   Utility
+══════════════════════════════════════════════════════ */
+.flex   { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.mt-12 { margin-top: 12px; }
+.text-muted { color: var(--muted2); font-size: 11px; }
+
+.pill {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <div class="header-bg"></div>
+  <div class="header-grid"></div>
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-eyebrow">Operating Systems Project</div>
+      <div class="header-title">Deadlock <span>Detection</span> &amp; Recovery</div>
+      <div class="header-sub">
+        Process Synchronization · Resource Management · Concurrent Systems
+      </div>
+      <div class="badge-row">
+        <span class="badge b-blue">Banker's Algorithm</span>
+        <span class="badge b-purple">RAG Visualization</span>
+        <span class="badge b-green">Wait-for Graph</span>
+        <span class="badge b-red">7 Recovery Strategies</span>
+        <span class="badge b-yellow">Multi-Instance Detection</span>
+        <span class="badge b-cyan">DFS Cycle Detection</span>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat">
+        <div class="stat-num" style="color:var(--accent)">3</div>
+        <div class="stat-label">Python Modules</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="color:var(--green)">7</div>
+        <div class="stat-label">Algorithms</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="color:var(--red)">7</div>
+        <div class="stat-label">Recovery Strategies</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ NAV ═══ -->
+<div class="nav">
+  <button class="nav-btn active" onclick="showTab('theory',this)">📚 Theory</button>
+  <button class="nav-btn" onclick="showTab('rag',this)">🔗 RAG Visualizer</button>
+  <button class="nav-btn" onclick="showTab('banker',this)">🏦 Banker's Algorithm</button>
+  <button class="nav-btn" onclick="showTab('detection',this)">🔍 Detection Algorithms</button>
+  <button class="nav-btn" onclick="showTab('recovery',this)">⚡ Recovery Strategies</button>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+
+<!-- ════════════════════ THEORY ════════════════════ -->
+<div id="theory" class="section active">
+  <div class="section-heading"><span class="sh-label">01 — Fundamentals</span><div class="sh-line"></div></div>
+
+  <div class="theory-grid mb-20">
+    <div class="card">
+      <div class="card-title"><div class="ct-dot" style="background:var(--red)"></div>What is a Deadlock?</div>
+      <div class="card-body">
+        A <strong style="color:var(--text)">deadlock</strong> is a system state where a set of processes are permanently blocked —
+        each process holds at least one resource and waits for another resource held by another process in the same set.
+        No process can proceed, and the system stalls indefinitely without external intervention.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="ct-dot" style="background:var(--yellow)"></div>System Model</div>
+      <div class="card-body">
+        The system contains <em style="color:var(--cyan)">m</em> resource types R₁…Rₘ, each with Wᵢ instances.
+        Process lifecycle: <strong style="color:var(--text)">Request → Use → Release</strong>.
+        A deadlock forms when the <strong style="color:var(--text)">Resource Allocation Graph (RAG)</strong>
+        contains a cycle (single-instance) or when the Coffman matrix algorithm returns unfinished processes.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="ct-dot" style="background:var(--green)"></div>Safe vs Unsafe State</div>
+      <div class="card-body">
+        A state is <strong style="color:var(--green)">SAFE</strong> if there exists a safe sequence &lt;P₁…Pₙ&gt;
+        where each Pᵢ can get all needed resources from: currently available +
+        resources held by all Pⱼ (j &lt; i). An unsafe state <em>may</em> lead to deadlock but is not
+        necessarily deadlocked yet.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="ct-dot" style="background:var(--cyan)"></div>Three Handling Approaches</div>
+      <div class="card-body">
+        <strong style="color:var(--text)">Prevention</strong> — eliminate one Coffman condition at design time.<br>
+        <strong style="color:var(--text)">Avoidance</strong> — Banker's Algorithm keeps system in safe states.<br>
+        <strong style="color:var(--text)">Detection &amp; Recovery</strong> — allow deadlocks, detect via RAG/matrix, then recover.<br>
+        <span style="color:var(--muted2);font-size:11px">Most real OSes use a combination of all three.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-heading"><span class="sh-label">02 — Coffman's 4 Necessary Conditions</span><div class="sh-line"></div></div>
+  <div class="coffman-grid mb-20">
+    <div class="cond-card">
+      <div class="cond-num" style="color:rgba(91,127,255,0.15)">01</div>
+      <div class="cond-title">Mutual Exclusion</div>
+      <div class="cond-desc">
+        At least one resource must be held in a non-shareable mode.
+        Only one process at a time can use the resource; others must wait.
+        Inherent for devices like printers, mutexes, semaphores.
+      </div>
+      <div class="cond-tag b-blue">Cannot always be prevented</div>
+    </div>
+    <div class="cond-card">
+      <div class="cond-num" style="color:rgba(0,207,255,0.15)">02</div>
+      <div class="cond-title">Hold and Wait</div>
+      <div class="cond-desc">
+        A process holding ≥1 resource is simultaneously waiting to acquire
+        additional resources currently held by other processes.
+        <strong style="color:var(--text)">Prevention:</strong> require all resources upfront.
+      </div>
+      <div class="cond-tag b-cyan">Can be prevented — low utilization cost</div>
+    </div>
+    <div class="cond-card">
+      <div class="cond-num" style="color:rgba(255,140,66,0.15)">03</div>
+      <div class="cond-title">No Preemption</div>
+      <div class="cond-desc">
+        Resources cannot be forcibly taken from a process.
+        They are released only voluntarily after the process has finished using them.
+        <strong style="color:var(--text)">Prevention:</strong> allow OS to preempt (e.g. CPU scheduling).
+      </div>
+      <div class="cond-tag b-yellow">Can be prevented for some resources</div>
+    </div>
+    <div class="cond-card">
+      <div class="cond-num" style="color:rgba(255,77,106,0.15)">04</div>
+      <div class="cond-title">Circular Wait</div>
+      <div class="cond-desc">
+        A closed chain P₁→P₂→…→Pₙ→P₁ where each Pᵢ holds a resource
+        needed by P(i+1). <strong style="color:var(--text)">Prevention:</strong> impose a
+        total ordering on all resource types and require requests in order.
+      </div>
+      <div class="cond-tag b-red">Most practical prevention target</div>
+    </div>
+  </div>
+
+  <div class="section-heading"><span class="sh-label">03 — Strategy Comparison</span><div class="sh-line"></div></div>
+  <div class="card">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Mechanism</th>
+          <th>Overhead</th>
+          <th>Resource Utilization</th>
+          <th>Use Case</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Prevention</td>
+          <td>Deny ≥1 Coffman condition statically</td>
+          <td><span class="pill b-green">Low</span></td>
+          <td><span class="pill b-red">Poor</span></td>
+          <td>Embedded / real-time systems</td>
+        </tr>
+        <tr>
+          <td>Avoidance (Banker's)</td>
+          <td>Grant only requests that keep system safe</td>
+          <td><span class="pill b-yellow">Medium</span></td>
+          <td><span class="pill b-yellow">Medium</span></td>
+          <td>Database systems, batch schedulers</td>
+        </tr>
+        <tr>
+          <td>Detection + Recovery</td>
+          <td>Run detection periodically; recover when found</td>
+          <td><span class="pill b-yellow">Medium</span></td>
+          <td><span class="pill b-green">High</span></td>
+          <td>General-purpose OS (Linux, Windows)</td>
+        </tr>
+        <tr>
+          <td>Ostrich Algorithm</td>
+          <td>Ignore the problem entirely</td>
+          <td><span class="pill b-green">None</span></td>
+          <td><span class="pill b-green">Maximum</span></td>
+          <td>Workstations (rare deadlocks accepted)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════ RAG ════════════════════ -->
+<div id="rag" class="section">
+  <div class="section-heading"><span class="sh-label">Resource Allocation Graph</span><div class="sh-line"></div></div>
+  <div class="rag-layout">
+    <div>
+      <div class="canvas-card">
+        <div class="canvas-toolbar">
+          <span class="tb-label">Preset</span>
+          <button class="tb-btn active" id="pDeadlock"  onclick="loadPreset('deadlock',this)">Deadlock Cycle</button>
+          <button class="tb-btn" id="pSafe"     onclick="loadPreset('safe',this)">Safe State</button>
+          <button class="tb-btn" id="pMulti"    onclick="loadPreset('multi',this)">Multi-Instance</button>
+          <button class="tb-btn" id="pWFG"      onclick="loadPreset('wfg',this)">Wait-For Graph</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" style="color:var(--green)" onclick="runRAGDetect()">▶ Run Detection</button>
+        </div>
+        <canvas id="ragCanvas" width="600" height="380"></canvas>
+        <div class="legend-row">
+          <div class="leg-item">
+            <div class="leg-circle" style="border-color:var(--accent)"></div>Process Node
+          </div>
+          <div class="leg-item">
+            <div class="leg-rect" style="border-color:var(--cyan)"></div>Resource Node
+          </div>
+          <div class="leg-item">
+            <div class="leg-line" style="border-color:var(--yellow)"></div>Allocation (R→P)
+          </div>
+          <div class="leg-item">
+            <div class="leg-line" style="border-color:var(--red)"></div>Request (P→R)
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="rag-side">
+      <div class="state-card">
+        <div class="card-title" style="margin-bottom:8px">Graph State</div>
+        <div id="ragStateRows"></div>
+      </div>
+      <div class="log-box" style="flex:1">
+        <div class="log-header"><div class="log-pulse"></div>Detection Log</div>
+        <div class="log-body" id="ragLog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ BANKER ════════════════════ -->
+<div id="banker" class="section">
+  <div class="section-heading"><span class="sh-label">Banker's Algorithm — Safety Analyzer</span><div class="sh-line"></div></div>
+
+  <div class="banker-grid">
+    <div class="matrix-card">
+      <div class="matrix-header"><span style="color:var(--yellow)">■</span> Allocation Matrix</div>
+      <table class="matrix" id="tAlloc"><tr><th></th><th>A</th><th>B</th><th>C</th></tr></table>
+    </div>
+    <div class="matrix-card">
+      <div class="matrix-header"><span style="color:var(--accent2)">■</span> Maximum Need</div>
+      <table class="matrix" id="tMax"><tr><th></th><th>A</th><th>B</th><th>C</th></tr></table>
+    </div>
+    <div class="matrix-card">
+      <div class="matrix-header"><span style="color:var(--orange)">■</span> Need = Max − Alloc</div>
+      <table class="matrix" id="tNeed"><tr><th></th><th>A</th><th>B</th><th>C</th></tr></table>
+    </div>
+  </div>
+
+  <div class="row-2 mb-16">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px">Available Resources</div>
+      <div class="avail-row" id="availRow"></div>
+      <div class="flex gap-8 mt-12">
+        <button class="btn btn-primary" onclick="runBanker()">▶ Run Safety Algorithm</button>
+        <button class="btn btn-outline" onclick="initBanker()">Reset</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        Result
+        <span id="bankerResultTag" class="pill" style="margin-left:auto;font-family:var(--mono);font-size:9px">—</span>
+      </div>
+      <div class="safe-sequence" id="safeSeqDisplay">
+        <span class="text-muted" style="font-family:var(--mono);font-size:10px">Run algorithm to see safe sequence...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title mb-12">Step-by-Step Trace</div>
+    <div class="step-log" id="bankerStepLog">
+      <span style="color:var(--muted)">Waiting for execution...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ DETECTION ════════════════════ -->
+<div id="detection" class="section">
+  <div class="section-heading"><span class="sh-label">Detection Algorithms</span><div class="sh-line"></div></div>
+  <div class="detection-layout">
+    <div>
+      <div class="code-block">
+        <div class="code-top">
+          <div class="code-dots"><div class="cd cd-r"></div><div class="cd cd-y"></div><div class="cd cd-g"></div></div>
+          <span class="code-filename">wait_for_graph.py</span>
+          <span class="code-complexity">O(V + E)</span>
+        </div>
+        <pre class="code-body"><span class="cm"># DFS Cycle Detection on Wait-For Graph</span>
+<span class="cm"># Single-instance resources only</span>
+<span class="cm"># An edge Pi→Pj means Pi waits for Pj</span>
+
+<span class="kw">def</span> <span class="fn">detect_deadlock_wfg</span>(processes, wait_for):
+    WHITE, GRAY, BLACK = <span class="nm">0</span>, <span class="nm">1</span>, <span class="nm">2</span>
+    color      = {p: WHITE <span class="kw">for</span> p <span class="kw">in</span> processes}
+    deadlocked = []
+
+    <span class="kw">def</span> <span class="fn">dfs</span>(u, path):
+        color[u] = GRAY
+        path.append(u)
+
+        <span class="kw">for</span> v <span class="kw">in</span> wait_for.get(u, []):
+            <span class="kw">if</span> color[v] == GRAY:        <span class="cm"># back-edge</span>
+                idx = path.index(v)
+                deadlocked.extend(path[idx:])
+                <span class="kw">return True</span>
+            <span class="kw">if</span> color[v] == WHITE:
+                <span class="kw">if</span> dfs(v, path): <span class="kw">return True</span>
+
+        path.pop()
+        color[u] = BLACK
+        <span class="kw">return False</span>
+
+    <span class="kw">for</span> p <span class="kw">in</span> processes:
+        <span class="kw">if</span> color[p] == WHITE:
+            dfs(p, [])
+
+    <span class="kw">return</span> list(set(deadlocked))</pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-top">
+          <div class="code-dots"><div class="cd cd-r"></div><div class="cd cd-y"></div><div class="cd cd-g"></div></div>
+          <span class="code-filename">bankers_safety.py</span>
+          <span class="code-complexity">O(n²m)</span>
+        </div>
+        <pre class="code-body"><span class="cm"># Banker's Safety Algorithm</span>
+<span class="cm"># Returns safe sequence or None</span>
+
+<span class="kw">def</span> <span class="fn">bankers_safety</span>(need, alloc, avail):
+    n, m   = len(need), len(avail)
+    work   = avail[:]
+    finish = [<span class="kw">False</span>] * n
+    seq    = []
+
+    <span class="kw">while</span> len(seq) &lt; n:
+        found = <span class="kw">False</span>
+        <span class="kw">for</span> i <span class="kw">in</span> range(n):
+            <span class="kw">if not</span> finish[i]:
+                can = all(need[i][j] &lt;= work[j]
+                          <span class="kw">for</span> j <span class="kw">in</span> range(m))
+                <span class="kw">if</span> can:
+                    <span class="kw">for</span> j <span class="kw">in</span> range(m):
+                        work[j] += alloc[i][j]
+                    finish[i] = <span class="kw">True</span>
+                    seq.append(f<span class="st">"P{i}"</span>)
+                    found = <span class="kw">True</span>
+        <span class="kw">if not</span> found:
+            <span class="kw">return None</span>  <span class="cm"># UNSAFE</span>
+
+    <span class="kw">return</span> seq  <span class="cm"># Safe sequence</span></pre>
+      </div>
+    </div>
+
+    <div>
+      <div class="code-block">
+        <div class="code-top">
+          <div class="code-dots"><div class="cd cd-r"></div><div class="cd cd-y"></div><div class="cd cd-g"></div></div>
+          <span class="code-filename">multi_instance_detection.py</span>
+          <span class="code-complexity">O(n²m)</span>
+        </div>
+        <pre class="code-body"><span class="cm"># Multi-Instance Deadlock Detection</span>
+<span class="cm"># Coffman matrix-based algorithm</span>
+<span class="cm"># Handles multiple resource instances</span>
+
+<span class="kw">def</span> <span class="fn">detect_multi</span>(alloc, request, avail):
+    n = len(alloc)
+    m = len(avail)
+    work   = avail[:]
+    finish = [<span class="kw">False</span>] * n
+
+    <span class="cm"># Procs with no outstanding requests</span>
+    <span class="kw">for</span> i <span class="kw">in</span> range(n):
+        <span class="kw">if</span> all(request[i][j] == <span class="nm">0</span>
+               <span class="kw">for</span> j <span class="kw">in</span> range(m)):
+            finish[i] = <span class="kw">True</span>
+
+    changed = <span class="kw">True</span>
+    <span class="kw">while</span> changed:
+        changed = <span class="kw">False</span>
+        <span class="kw">for</span> i <span class="kw">in</span> range(n):
+            <span class="kw">if not</span> finish[i]:
+                can = all(
+                    request[i][j] &lt;= work[j]
+                    <span class="kw">for</span> j <span class="kw">in</span> range(m)
+                )
+                <span class="kw">if</span> can:
+                    <span class="kw">for</span> j <span class="kw">in</span> range(m):
+                        work[j] += alloc[i][j]
+                    finish[i] = <span class="kw">True</span>
+                    changed   = <span class="kw">True</span>
+
+    dead = [i <span class="kw">for</span> i <span class="kw">in</span> range(n)
+            <span class="kw">if not</span> finish[i]]
+    <span class="kw">return</span> dead  <span class="cm"># deadlocked indices</span></pre>
+      </div>
+
+      <div class="complexity-table">
+        <div class="matrix-header" style="padding:9px 14px">Algorithm Comparison</div>
+        <table class="compare-table" style="font-size:11px">
+          <thead>
+            <tr>
+              <th>Algorithm</th><th>Time</th><th>Space</th><th>Multi-Instance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--cyan);font-family:var(--mono);font-size:10px">DFS on WFG</td>
+              <td><span class="pill b-green" style="font-size:8px">O(V+E)</span></td>
+              <td style="color:var(--muted2);font-size:10px;font-family:var(--mono)">O(V)</td>
+              <td><span style="color:var(--red)">No</span></td>
+            </tr>
+            <tr>
+              <td style="color:var(--cyan);font-family:var(--mono);font-size:10px">Multi-instance</td>
+              <td><span class="pill b-yellow" style="font-size:8px">O(n²m)</span></td>
+              <td style="color:var(--muted2);font-size:10px;font-family:var(--mono)">O(nm)</td>
+              <td><span style="color:var(--green)">Yes</span></td>
+            </tr>
+            <tr>
+              <td style="color:var(--cyan);font-family:var(--mono);font-size:10px">Banker's Safety</td>
+              <td><span class="pill b-yellow" style="font-size:8px">O(n²m)</span></td>
+              <td style="color:var(--muted2);font-size:10px;font-family:var(--mono)">O(nm)</td>
+              <td><span style="color:var(--green)">Yes</span></td>
+            </tr>
+            <tr>
+              <td style="color:var(--cyan);font-family:var(--mono);font-size:10px">Ostrich</td>
+              <td><span class="pill b-green" style="font-size:8px">O(1)</span></td>
+              <td style="color:var(--muted2);font-size:10px;font-family:var(--mono)">O(1)</td>
+              <td><span style="color:var(--muted)">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card mt-12">
+        <div class="card-title mb-12"><div class="ct-dot" style="background:var(--yellow)"></div>When to Trigger Detection?</div>
+        <div class="card-body" style="line-height:2.1">
+          <span style="color:var(--cyan)">▸</span> <strong style="color:var(--text)">Periodically</strong> — every fixed interval (e.g. every 5 minutes)<br>
+          <span style="color:var(--cyan)">▸</span> <strong style="color:var(--text)">On block</strong> — whenever a process blocks on a resource request<br>
+          <span style="color:var(--cyan)">▸</span> <strong style="color:var(--text)">CPU heuristic</strong> — when CPU utilization drops near 0%<br>
+          <span style="color:var(--cyan)">▸</span> <strong style="color:var(--text)">On demand</strong> — manual operator trigger<br>
+          <br>
+          <span style="color:var(--muted);font-size:10px;font-family:var(--mono)">
+            Trade-off: frequent detection → low deadlock latency, high CPU cost.<br>
+            Infrequent detection → less overhead, longer deadlock duration.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ RECOVERY ════════════════════ -->
+<div id="recovery" class="section">
+  <div class="section-heading"><span class="sh-label">Recovery Strategies</span><div class="sh-line"></div></div>
+
+  <div class="strategy-grid mb-16">
+    <div class="strat-card sc-kill" onclick="selectStrategy('kill',this)" id="s-kill">
+      <div class="sc-icon">☠️</div>
+      <div class="sc-name">Terminate All</div>
+      <div class="sc-desc">Abort all deadlocked processes simultaneously. Simple but highest data loss.</div>
+      <div class="sc-badge b-red">High cost · Immediate</div>
+    </div>
+    <div class="strat-card sc-one" onclick="selectStrategy('one',this)" id="s-one">
+      <div class="sc-icon">🎯</div>
+      <div class="sc-name">Terminate One-by-One</div>
+      <div class="sc-desc">Kill cheapest victim, re-detect, repeat until deadlock is resolved.</div>
+      <div class="sc-badge b-yellow">Medium cost · Iterative</div>
+    </div>
+    <div class="strat-card sc-preempt" onclick="selectStrategy('preempt',this)" id="s-preempt">
+      <div class="sc-icon">⚡</div>
+      <div class="sc-name">Resource Preemption</div>
+      <div class="sc-desc">Forcibly take resources from a low-priority victim. Victim rolls back to waiting.</div>
+      <div class="sc-badge b-yellow">Medium cost · Selective</div>
+    </div>
+    <div class="strat-card sc-rollback" onclick="selectStrategy('rollback',this)" id="s-rollback">
+      <div class="sc-icon">↩️</div>
+      <div class="sc-name">Checkpoint Rollback</div>
+      <div class="sc-desc">Roll process back to last saved checkpoint. Requires checkpointing overhead.</div>
+      <div class="sc-badge b-cyan">Low data loss · High overhead</div>
+    </div>
+    <div class="strat-card sc-waitdie" onclick="selectStrategy('waitdie',this)" id="s-waitdie">
+      <div class="sc-icon">⏳</div>
+      <div class="sc-name">Wait-Die</div>
+      <div class="sc-desc">Older process waits; younger process is aborted. Timestamp-based, no starvation.</div>
+      <div class="sc-badge b-green">No starvation · DB-friendly</div>
+    </div>
+    <div class="strat-card sc-wound" onclick="selectStrategy('wound',this)" id="s-wound">
+      <div class="sc-icon">🗡️</div>
+      <div class="sc-name">Wound-Wait</div>
+      <div class="sc-desc">Older wounds (preempts) younger; younger waits for older. Preemptive variant.</div>
+      <div class="sc-badge b-orange">Preemptive · Low latency</div>
+    </div>
+    <div class="strat-card sc-priority" onclick="selectStrategy('priority',this)" id="s-priority">
+      <div class="sc-icon">🏆</div>
+      <div class="sc-name">Priority Victim</div>
+      <div class="sc-desc">Cost function considers priority, age, resources held. Kills minimum-cost victim.</div>
+      <div class="sc-badge b-blue">Optimal selection</div>
+    </div>
+    <div class="strat-card sc-combined" onclick="selectStrategy('combined',this)" id="s-combined">
+      <div class="sc-icon">⚙️</div>
+      <div class="sc-name">Combined Approach</div>
+      <div class="sc-desc">Partition resources — prevention for some, avoidance for others, detection for rest.</div>
+      <div class="sc-badge b-purple">Production-grade</div>
+    </div>
+  </div>
+
+  <div class="sim-panel">
+    <div class="proc-table">
+      <div class="sim-controls">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Live Simulation</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary btn-sm" onclick="applyRecovery()">▶ Apply Recovery</button>
+        <button class="btn btn-outline btn-sm" onclick="resetSim()">Reset</button>
+      </div>
+      <div id="simProcesses"></div>
+    </div>
+    <div class="log-box">
+      <div class="log-header"><div class="log-pulse"></div>Recovery Log</div>
+      <div class="log-body" id="recoveryLog">
+        <span class="l-muted">Select a strategy above, then click Apply Recovery.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ══════════════════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════════════════
+function showTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'rag')    { setTimeout(initRAG,    20); }
+  if (id === 'banker') { setTimeout(initBanker, 20); }
+  if (id === 'recovery') { setTimeout(initSim, 20); }
+}
+
+// ══════════════════════════════════════════════════════
+// UTILITY
+// ══════════════════════════════════════════════════════
+function rlog(containerId, msg, cls) {
+  const el = document.getElementById(containerId);
+  const d  = document.createElement('div');
+  d.className = cls || 'l-muted';
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog(id) {
+  document.getElementById(id).innerHTML = '';
+}
+
+// ══════════════════════════════════════════════════════
+// RAG
+// ══════════════════════════════════════════════════════
+const canvas = document.getElementById('ragCanvas');
+const ctx    = canvas.getContext('2d');
+
+const PRESETS = {
+  deadlock: {
+    procs: [
+      {id:'P1',x:110,y:110,dead:true},
+      {id:'P2',x:380,y:100,dead:true},
+      {id:'P3',x:240,y:290,dead:true},
+    ],
+    ress: [
+      {id:'R1',x:250,y:100,inst:2,used:2},
+      {id:'R2',x:100,y:265,inst:1,used:1},
+      {id:'R3',x:460,y:220,inst:1,used:1},
+    ],
+    edges: [
+      {f:'P1',t:'R1',tp:'req'},
+      {f:'R1',t:'P2',tp:'alloc'},
+      {f:'P2',t:'R3',tp:'req'},
+      {f:'R3',t:'P3',tp:'alloc'},
+      {f:'P3',t:'R2',tp:'req'},
+      {f:'R2',t:'P1',tp:'alloc'},
+    ],
+    hasDeadlock: true,
+    cycle: 'P1→R1→P2→R3→P3→R2→P1'
+  },
+  safe: {
+    procs: [
+      {id:'P1',x:100,y:200,dead:false},
+      {id:'P2',x:280,y:90,dead:false},
+      {id:'P3',x:470,y:200,dead:false},
+    ],
+    ress: [
+      {id:'R1',x:185,y:150,inst:2,used:1},
+      {id:'R2',x:370,y:150,inst:2,used:1},
+    ],
+    edges: [
+      {f:'R1',t:'P1',tp:'alloc'},
+      {f:'P1',t:'R2',tp:'req'},
+      {f:'R2',t:'P3',tp:'alloc'},
+    ],
+    hasDeadlock: false,
+    cycle: ''
+  },
+  multi: {
+    procs: [
+      {id:'P1',x:100,y:150,dead:false},
+      {id:'P2',x:310,y:80,dead:false},
+      {id:'P3',x:510,y:150,dead:false},
+      {id:'P4',x:310,y:290,dead:true},
+    ],
+    ress: [
+      {id:'R1',x:200,y:220,inst:3,used:3},
+      {id:'R2',x:420,y:220,inst:2,used:2},
+    ],
+    edges: [
+      {f:'R1',t:'P1',tp:'alloc'},
+      {f:'R1',t:'P2',tp:'alloc'},
+      {f:'R2',t:'P3',tp:'alloc'},
+      {f:'P4',t:'R1',tp:'req'},
+      {f:'P4',t:'R2',tp:'req'},
+      {f:'P3',t:'R1',tp:'req'},
+    ],
+    hasDeadlock: true,
+    cycle: 'P4→R2→P3→R1→(all used)'
+  },
+  wfg: {
+    procs: [
+      {id:'P1',x:120,y:100,dead:true},
+      {id:'P2',x:430,y:100,dead:true},
+      {id:'P3',x:270,y:290,dead:true},
+      {id:'P4',x:490,y:260,dead:false},
+    ],
+    ress: [],
+    edges: [
+      {f:'P1',t:'P2',tp:'req'},
+      {f:'P2',t:'P3',tp:'req'},
+      {f:'P3',t:'P1',tp:'req'},
+      {f:'P2',t:'P4',tp:'req'},
+    ],
+    hasDeadlock: true,
+    cycle: 'P1→P2→P3→P1'
+  }
+};
+
+let curPreset = PRESETS.deadlock;
+
+function initRAG() {
+  loadPreset('deadlock', document.getElementById('pDeadlock'));
+}
+
+function loadPreset(name, btn) {
+  document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  curPreset = PRESETS[name];
+  drawRAG();
+  updateRAGState();
+  clearLog('ragLog');
+  rlog('ragLog', `[INIT] Loaded preset: ${name}`, 'l-info');
+  if (curPreset.hasDeadlock) {
+    rlog('ragLog', `[WARN] Analyzing graph structure...`, 'l-warn');
+    rlog('ragLog', `[DEAD] Cycle detected: ${curPreset.cycle}`, 'l-error');
+    rlog('ragLog', `[DEAD] Deadlocked: {${curPreset.procs.filter(p=>p.dead).map(p=>p.id).join(', ')}}`, 'l-error');
+  } else {
+    rlog('ragLog', `[SCAN] Running DFS cycle detection...`, 'l-warn');
+    rlog('ragLog', `[OK]   No cycle found — system is SAFE`, 'l-ok');
+  }
+}
+
+function runRAGDetect() {
+  clearLog('ragLog');
+  rlog('ragLog', '[RUN]  Starting DFS traversal...', 'l-accent');
+  const procs = curPreset.procs.map(p=>p.id);
+  procs.forEach((p,i) => {
+    setTimeout(() => rlog('ragLog', `[DFS]  Visiting ${p} — color: GRAY`, 'l-muted'), i*120);
+  });
+  setTimeout(() => {
+    if (curPreset.hasDeadlock) {
+      rlog('ragLog', `[BACK] Back-edge found — cycle confirmed`, 'l-warn');
+      rlog('ragLog', `[DEAD] Deadlock: ${curPreset.cycle}`, 'l-error');
+    } else {
+      rlog('ragLog', `[OK]   DFS complete — no back-edges found`, 'l-ok');
+      rlog('ragLog', `[SAFE] System is in a SAFE state`, 'l-ok');
+    }
+  }, procs.length * 120 + 100);
+}
+
+function updateRAGState() {
+  const rows = [
+    ['Processes', curPreset.procs.length],
+    ['Resources', curPreset.ress.length],
+    ['Edges',     curPreset.edges.length],
+    ['Deadlocked', curPreset.procs.filter(p=>p.dead).length],
+    ['Status', curPreset.hasDeadlock
+      ? '<span style="color:var(--red)">DEADLOCK ⚠</span>'
+      : '<span style="color:var(--green)">SAFE ✓</span>'],
+  ];
+  document.getElementById('ragStateRows').innerHTML = rows.map(([k,v]) =>
+    `<div class="state-row"><span class="state-key">${k}</span><span class="state-val">${v}</span></div>`
+  ).join('');
+}
+
+function drawRAG() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = '#06080e';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 1;
+  for(let x=0;x<canvas.width;x+=40){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();
+  }
+  for(let y=0;y<canvas.height;y+=40){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
+  }
+
+  const allNodes = {};
+  curPreset.procs.forEach(p => allNodes[p.id] = {x:p.x,y:p.y,type:'proc'});
+  curPreset.ress.forEach(r  => allNodes[r.id] = {x:r.x,y:r.y,type:'res'});
+
+  // Edges
+  curPreset.edges.forEach(e => {
+    const from = allNodes[e.f];
+    const to   = allNodes[e.t];
+    if (!from || !to) return;
+
+    const isReq = e.tp === 'req';
+    const color = isReq ? '#ff4d6a' : '#ffca28';
+
+    const angle  = Math.atan2(to.y - from.y, to.x - from.x);
+    const srcOff = (allNodes[e.f].type === 'proc') ? 22 : 24;
+    const dstOff = (allNodes[e.t].type === 'proc') ? 22 : 24;
+
+    const x1 = from.x + Math.cos(angle) * srcOff;
+    const y1 = from.y + Math.sin(angle) * srcOff;
+    const x2 = to.x   - Math.cos(angle) * dstOff;
+    const y2 = to.y   - Math.sin(angle) * dstOff;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.8;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 5;
+    if (isReq) ctx.setLineDash([5,3]);
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    const hlen = 9;
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-hlen*Math.cos(angle-0.4), y2-hlen*Math.sin(angle-0.4));
+    ctx.lineTo(x2-hlen*Math.cos(angle+0.4), y2-hlen*Math.sin(angle+0.4));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Resource nodes
+  curPreset.ress.forEach(r => {
+    const sz = 44;
+    ctx.save();
+    ctx.shadowColor = '#00cfff';
+    ctx.shadowBlur  = 8;
+    ctx.fillStyle   = '#0d1420';
+    ctx.strokeStyle = '#00cfff';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    const rx = r.x - sz/2, ry = r.y - sz/2;
+    ctx.roundRect(rx, ry, sz, sz, 5);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    // Instance dots
+    for (let i=0; i<r.inst; i++) {
+      const dx = (i - (r.inst-1)/2) * 12;
+      ctx.beginPath();
+      ctx.arc(r.x+dx, r.y, 4.5, 0, Math.PI*2);
+      ctx.fillStyle = i < r.used ? '#ffca28' : '#1c2a3a';
+      ctx.fill();
+    }
+
+    ctx.fillStyle   = '#00cfff';
+    ctx.font        = '500 10px "JetBrains Mono",monospace';
+    ctx.textAlign   = 'center';
+    ctx.fillText(r.id, r.x, r.y + sz/2 + 14);
+  });
+
+  // Process nodes
+  curPreset.procs.forEach(p => {
+    const isDead = p.dead;
+    const pcol   = isDead ? '#ff4d6a' : '#5b7fff';
+
+    ctx.save();
+    ctx.shadowColor = pcol;
+    ctx.shadowBlur  = isDead ? 16 : 8;
+    ctx.fillStyle   = '#0d1420';
+    ctx.strokeStyle = pcol;
+    ctx.lineWidth   = isDead ? 2.5 : 1.8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 22, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle   = isDead ? '#ff4d6a' : '#e2e8f0';
+    ctx.font        = '600 11px "JetBrains Mono",monospace';
+    ctx.textAlign   = 'center';
+    ctx.textBaseline= 'middle';
+    ctx.fillText(p.id, p.x, p.y);
+    ctx.restore();
+
+    if (isDead) {
+      ctx.fillStyle   = 'rgba(255,77,106,0.8)';
+      ctx.font        = '500 9px "JetBrains Mono",monospace';
+      ctx.textAlign   = 'center';
+      ctx.textBaseline= 'alphabetic';
+      ctx.fillText('DEAD', p.x, p.y + 36);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// BANKER'S
+// ══════════════════════════════════════════════════════
+const BD = {
+  alloc: [[0,1,0],[2,0,0],[3,0,2],[2,1,1],[0,0,2]],
+  max:   [[7,5,3],[3,2,2],[9,0,2],[2,2,2],[4,3,3]],
+  avail: [3,3,2]
+};
+
+function initBanker() {
+  const procs = ['P0','P1','P2','P3','P4'];
+  const need  = BD.alloc.map((r,i) => r.map((v,j) => BD.max[i][j]-v));
+
+  [
+    {id:'tAlloc',data:BD.alloc},
+    {id:'tMax',  data:BD.max},
+    {id:'tNeed', data:need},
+  ].forEach(({id,data}) => {
+    const t = document.getElementById(id);
+    while (t.rows.length > 1) t.deleteRow(1);
+    data.forEach((row, i) => {
+      const tr = t.insertRow();
+      let td = tr.insertCell();
+      td.textContent = procs[i];
+      td.className   = 'proc-id';
+      row.forEach((v,j) => {
+        let c = tr.insertCell();
+        c.textContent = v;
+        if (id==='tNeed' && v < 0) c.className='hl-red';
+      });
+    });
+  });
+
+  const avRow = document.getElementById('availRow');
+  avRow.innerHTML = ['A','B','C'].map((r,i) => `
+    <div style="flex:1">
+      <div class="avail-label">${r}</div>
+      <div class="avail-chip" id="av${r}">${BD.avail[i]}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('safeSeqDisplay').innerHTML =
+    '<span class="text-muted" style="font-family:var(--mono);font-size:10px">Run algorithm to see safe sequence...</span>';
+  document.getElementById('bankerResultTag').textContent = '—';
+  document.getElementById('bankerResultTag').style.color = '';
+  document.getElementById('bankerStepLog').innerHTML =
+    '<span style="color:var(--muted)">Waiting for execution...</span>';
+}
+
+function runBanker() {
+  const n    = BD.alloc.length;
+  const m    = BD.avail.length;
+  const need = BD.alloc.map((r,i) => r.map((v,j) => BD.max[i][j]-v));
+  const work = [...BD.avail];
+  const fin  = Array(n).fill(false);
+  const seq  = [];
+  const log  = [];
+
+  log.push({t:'', msg:`Available (Work) = [${work.join(', ')}]`, cls:'l-muted'});
+
+  let changed = true;
+  while (changed && seq.length < n) {
+    changed = false;
+    for (let i=0; i<n; i++) {
+      if (!fin[i]) {
+        const can = need[i].every((v,j) => v<=work[j]);
+        if (can) {
+          for(let j=0;j<m;j++) work[j]+=BD.alloc[i][j];
+          fin[i] = true;
+          seq.push(i);
+          changed = true;
+          log.push({
+            msg:`P${i} → need=${JSON.stringify(need[i])} ≤ work → releases ${JSON.stringify(BD.alloc[i])} → work=[${work.join(', ')}]`,
+            cls:'step-run'
+          });
+        }
+      }
+    }
+  }
+
+  const isSafe = seq.length === n;
+  const tag = document.getElementById('bankerResultTag');
+  tag.textContent = isSafe ? '✓ SAFE STATE' : '✗ UNSAFE STATE';
+  tag.style.color = isSafe ? 'var(--green)' : 'var(--red)';
+
+  const seqDiv = document.getElementById('safeSeqDisplay');
+  seqDiv.innerHTML = '';
+  if (isSafe) {
+    seq.forEach((p,i) => {
+      const span = document.createElement('span');
+      span.className = 'seq-pill';
+      span.textContent = `P${p}`;
+      span.style.animationDelay = `${i*0.08}s`;
+      seqDiv.appendChild(span);
+      if (i < seq.length-1) {
+        const a = document.createElement('span');
+        a.className = 'seq-arrow'; a.textContent='→';
+        seqDiv.appendChild(a);
+      }
+    });
+    log.push({msg:`✓ SAFE SEQUENCE: <${seq.map(p=>'P'+p).join(' → ')}>`, cls:'step-ok'});
+  } else {
+    seqDiv.innerHTML = '<span style="color:var(--red);font-family:var(--mono);font-size:11px">⚠ System is in an UNSAFE state!</span>';
+    log.push({msg:`✗ UNSAFE — stuck: {${[...Array(n).keys()].filter(i=>!fin[i]).map(i=>'P'+i).join(', ')}}`, cls:'step-bad'});
+  }
+
+  const logDiv = document.getElementById('bankerStepLog');
+  logDiv.innerHTML = log.map(l=>`<div class="${l.cls}">${l.msg}</div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// RECOVERY SIM
+// ══════════════════════════════════════════════════════
+const INIT_PROCS = [
+  {id:'P1',name:'DB Writer',    status:'blocked', holds:'R1', wants:'R2', priority:3},
+  {id:'P2',name:'File Handler', status:'blocked', holds:'R2', wants:'R3', priority:2},
+  {id:'P3',name:'Net Daemon',   status:'blocked', holds:'R3', wants:'R1', priority:1},
+  {id:'P4',name:'User Shell',   status:'running', holds:'R4', wants:null, priority:5},
+  {id:'P5',name:'Logger',       status:'waiting', holds:null, wants:'R5', priority:4},
+];
+
+let simProcs = INIT_PROCS.map(p=>({...p}));
+let activeStrategy = null;
+
+function initSim() {
+  simProcs = INIT_PROCS.map(p=>({...p}));
+  renderSim();
+}
+
+function renderSim() {
+  const el = document.getElementById('simProcesses');
+  el.innerHTML = simProcs.map(p => `
+    <div class="proc-row" style="${p.status==='blocked'?'background:rgba(255,77,106,0.03)':''}">
+      <span class="pr-id">${p.id}</span>
+      <span class="pr-name">${p.name}</span>
+      <span class="pr-hold">${p.holds ? `holds: <span style="color:var(--cyan)">${p.holds}</span>` : 'holds: —'}</span>
+      <span class="pr-want">${p.wants ? `wants: <span style="color:var(--red)">${p.wants}</span>` : 'wants: —'}</span>
+      <span class="pr-status ps-${p.status}">${p.status}</span>
+    </div>
+  `).join('');
+}
+
+function selectStrategy(key, el) {
+  document.querySelectorAll('.strat-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  activeStrategy = key;
+}
+
+function applyRecovery() {
+  if (!activeStrategy) {
+    clearLog('recoveryLog');
+    rlog('recoveryLog','⚠ Select a strategy first.','l-error');
+    return;
+  }
+  clearLog('recoveryLog');
+  const dead = ['P1','P2','P3'];
+
+  const strats = {
+    kill: () => {
+      rlog('recoveryLog','[DETECT] Deadlock: P1 → R1, P2 → R2, P3 → R3 (circular)','l-error');
+      rlog('recoveryLog','[ACTION] Strategy: Terminate All Deadlocked Processes','l-warn');
+      dead.forEach(pid => {
+        const p = simProcs.find(x=>x.id===pid);
+        p.status='killed'; p.holds=null; p.wants=null;
+        rlog('recoveryLog',`[KILL]   ${pid} (${p.name}) terminated — resources released`,'l-error');
+      });
+      simProcs.find(p=>p.id==='P5').status='running';
+      rlog('recoveryLog','[OK]     All deadlocked processes killed. System stable.','l-ok');
+    },
+    one: () => {
+      rlog('recoveryLog','[DETECT] Deadlock: {P1, P2, P3}','l-error');
+      rlog('recoveryLog','[ACTION] Strategy: Terminate One-by-One (min-cost)','l-warn');
+      rlog('recoveryLog','[COST]   P1=cost:8 | P2=cost:12 | P3=cost:6','l-muted');
+      rlog('recoveryLog','[ROUND1] Victim: P3 (cost=6, holds 1 resource)','l-warn');
+      const p3=simProcs.find(p=>p.id==='P3');
+      p3.status='killed'; p3.holds=null; p3.wants=null;
+      rlog('recoveryLog','[KILL]   P3 terminated → R3 released','l-error');
+      rlog('recoveryLog','[REDET]  Re-running detection...','l-accent');
+      const p1=simProcs.find(p=>p.id==='P1');
+      const p2=simProcs.find(p=>p.id==='P2');
+      p1.status='running'; p1.wants=null;
+      p2.status='running'; p2.wants=null;
+      rlog('recoveryLog','[OK]     P1 and P2 unblocked. No deadlock detected.','l-ok');
+    },
+    preempt: () => {
+      rlog('recoveryLog','[DETECT] Deadlock: {P1, P2, P3}','l-error');
+      rlog('recoveryLog','[ACTION] Strategy: Resource Preemption','l-warn');
+      rlog('recoveryLog','[SCORE]  P1(pri=3) P2(pri=2) P3(pri=1←victim)','l-muted');
+      rlog('recoveryLog','[PREEMPT] P3 selected — lowest priority','l-warn');
+      rlog('recoveryLog','[PREEMPT] Forcibly taking R3 from P3','l-warn');
+      const p3=simProcs.find(p=>p.id==='P3');
+      p3.status='waiting'; p3.holds=null;
+      rlog('recoveryLog','[ASSIGN] R3 assigned to P2 — P2 can now complete','l-accent');
+      const p2=simProcs.find(p=>p.id==='P2');
+      p2.status='running'; p2.wants=null;
+      rlog('recoveryLog','[CHAIN]  P2 finishes → R2 freed → P1 unblocked','l-accent');
+      simProcs.find(p=>p.id==='P1').status='running';
+      simProcs.find(p=>p.id==='P1').wants=null;
+      rlog('recoveryLog','[NOTE]   P3 in waiting state — will retry later','l-muted');
+      rlog('recoveryLog','[OK]     Cycle broken. Deadlock resolved.','l-ok');
+    },
+    rollback: () => {
+      rlog('recoveryLog','[DETECT] Deadlock at T=142ms','l-error');
+      rlog('recoveryLog','[ACTION] Strategy: Checkpoint Rollback','l-warn');
+      dead.forEach(pid => {
+        const p=simProcs.find(x=>x.id===pid);
+        rlog('recoveryLog',`[ROLLBACK] ${pid} rolled back to checkpoint T=80ms`,'l-accent');
+        p.status='running'; p.holds=null; p.wants=null;
+      });
+      rlog('recoveryLog','[INFO]   Processes restored to pre-request state','l-muted');
+      rlog('recoveryLog','[INFO]   Next requests will enforce R1<R2<R3 ordering','l-muted');
+      rlog('recoveryLog','[OK]     Rollback complete. Circular wait eliminated.','l-ok');
+    },
+    waitdie: () => {
+      rlog('recoveryLog','[ACTION] Strategy: Wait-Die (timestamp-based)','l-warn');
+      rlog('recoveryLog','[TS]     P1=t:10ms  P2=t:30ms  P3=t:50ms','l-muted');
+      rlog('recoveryLog','[RULE]   Older process WAITS; younger process DIES','l-muted');
+      rlog('recoveryLog','[CHECK]  P3(50ms) wants R1 held by P1(10ms): P3 is YOUNGER → DIE','l-warn');
+      const p3=simProcs.find(p=>p.id==='P3');
+      p3.status='killed'; p3.holds=null; p3.wants=null;
+      rlog('recoveryLog','[DIE]    P3 aborted','l-error');
+      rlog('recoveryLog','[CHECK]  P2(30ms) wants R3 — R3 now free → P2 proceeds','l-accent');
+      const p2=simProcs.find(p=>p.id==='P2');
+      p2.status='running'; p2.wants=null;
+      rlog('recoveryLog','[CHECK]  P1(10ms) oldest — P1 proceeds normally','l-accent');
+      simProcs.find(p=>p.id==='P1').status='running';
+      simProcs.find(p=>p.id==='P1').wants=null;
+      rlog('recoveryLog','[OK]     Wait-Die applied. No deadlock remains.','l-ok');
+    },
+    wound: () => {
+      rlog('recoveryLog','[ACTION] Strategy: Wound-Wait (timestamp-based)','l-warn');
+      rlog('recoveryLog','[TS]     P1=t:10ms  P2=t:30ms  P3=t:50ms','l-muted');
+      rlog('recoveryLog','[RULE]   Older WOUNDS younger; younger WAITS for older','l-muted');
+      rlog('recoveryLog','[CHECK]  P1(10ms) older than P2(30ms) → P1 WOUNDS P2','l-warn');
+      rlog('recoveryLog','[WOUND]  R2 preempted from P2 → given to P1','l-accent');
+      const p2=simProcs.find(p=>p.id==='P2');
+      p2.status='waiting'; p2.holds=null;
+      rlog('recoveryLog','[CHECK]  P2(30ms) older than P3(50ms) → P2 WOUNDS P3','l-warn');
+      rlog('recoveryLog','[WOUND]  R3 preempted from P3 → given to P2 (when ready)','l-accent');
+      const p3=simProcs.find(p=>p.id==='P3');
+      p3.status='waiting'; p3.holds=null;
+      simProcs.find(p=>p.id==='P1').status='running';
+      simProcs.find(p=>p.id==='P1').wants=null;
+      rlog('recoveryLog','[OK]     Wound-Wait applied. P1 runs; P2,P3 retry later.','l-ok');
+    },
+    priority: () => {
+      rlog('recoveryLog','[DETECT] Deadlock: {P1, P2, P3}','l-error');
+      rlog('recoveryLog','[ACTION] Strategy: Priority-Based Victim Selection','l-warn');
+      rlog('recoveryLog','[COST]   P1: pri=3, holds=1, age=30s → cost=51','l-muted');
+      rlog('recoveryLog','[COST]   P2: pri=2, holds=1, age=20s → cost=45','l-muted');
+      rlog('recoveryLog','[COST]   P3: pri=1, holds=1, age=10s → cost=25 ← minimum','l-muted');
+      rlog('recoveryLog','[VICTIM] P3 selected (cost=25, lowest priority)','l-warn');
+      const p3=simProcs.find(p=>p.id==='P3');
+      p3.status='killed'; p3.holds=null; p3.wants=null;
+      rlog('recoveryLog','[KILL]   P3 terminated — R3 released','l-error');
+      rlog('recoveryLog','[CHAIN]  R3→P2→done→R2→P1→done','l-accent');
+      simProcs.find(p=>p.id==='P1').status='running';
+      simProcs.find(p=>p.id==='P1').wants=null;
+      simProcs.find(p=>p.id==='P2').status='running';
+      simProcs.find(p=>p.id==='P2').wants=null;
+      rlog('recoveryLog','[INFO]   P3 can be re-scheduled when resources are available','l-muted');
+      rlog('recoveryLog','[OK]     Priority-based recovery complete.','l-ok');
+    },
+    combined: () => {
+      rlog('recoveryLog','[ACTION] Strategy: Combined Approach','l-warn');
+      rlog('recoveryLog','[PART]   Resource partition analysis:','l-accent');
+      rlog('recoveryLog','[PART]   R1,R2 → Prevention (total ordering R1<R2)','l-accent');
+      rlog('recoveryLog','[PART]   R3,R4 → Avoidance (Banker\'s algorithm)','l-accent');
+      rlog('recoveryLog','[PART]   R5+   → Detection + Recovery','l-accent');
+      rlog('recoveryLog','[APPLY]  Enforcing order constraint — circular wait broken','l-warn');
+      dead.forEach(pid => {
+        const p=simProcs.find(x=>x.id===pid);
+        p.status='running'; p.wants=null;
+        rlog('recoveryLog',`[UNBLOCK] ${pid} unblocked under new ordering`,'l-ok');
+      });
+      rlog('recoveryLog','[OK]     Combined strategy applied. All processes running.','l-ok');
+    },
+  };
+
+  strats[activeStrategy]?.();
+  renderSim();
+}
+
+function resetSim() {
+  initSim();
+  clearLog('recoveryLog');
+  rlog('recoveryLog','Select a strategy above, then click Apply Recovery.','l-muted');
+  document.querySelectorAll('.strat-card').forEach(c=>c.classList.remove('selected'));
+  activeStrategy = null;
+}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  initBanker();
+  initSim();
+  setTimeout(initRAG, 100);
+});
+</script>
+</body>
+</html>
