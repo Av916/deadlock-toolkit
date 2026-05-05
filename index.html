@@ -509,6 +509,41 @@ body {
 .tb-btn:hover { border-color: var(--accent); color: var(--accent); }
 .tb-btn.active { background: rgba(91,127,255,0.15); border-color: var(--accent); color: var(--accent); }
 
+.custom-graph {
+  margin-top: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.custom-graph-input {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  background: #05070b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.7;
+  padding: 10px 12px;
+}
+
+.custom-graph-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.input-hint {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 #ragCanvas {
   display: block;
   cursor: default;
@@ -572,8 +607,8 @@ body {
 }
 
 .state-row:last-child { border-bottom: none; }
-.state-key { color: var(--muted); }
-.state-val { color: var(--text); }
+.state-key { color: var(--muted); flex-shrink: 0; }
+.state-val { color: var(--text); text-align: right; max-width: 65%; overflow-wrap: anywhere; }
 
 /* ══════════════════════════════════════════════════════
    ── BANKER SECTION ──
@@ -1149,12 +1184,13 @@ pre.code-body {
           <span class="tb-label">Preset</span>
           <button class="tb-btn active" id="pDeadlock"  onclick="loadPreset('deadlock',this)">Deadlock Cycle</button>
           <button class="tb-btn" id="pSafe"     onclick="loadPreset('safe',this)">Safe State</button>
-          <button class="tb-btn" id="pMulti"    onclick="loadPreset('multi',this)">Multi-Instance</button>
-          <button class="tb-btn" id="pWFG"      onclick="loadPreset('wfg',this)">Wait-For Graph</button>
-          <div class="tb-sep"></div>
-          <button class="tb-btn" style="color:var(--green)" onclick="runRAGDetect()">▶ Run Detection</button>
-        </div>
-        <canvas id="ragCanvas" width="600" height="380"></canvas>
+	          <button class="tb-btn" id="pMulti"    onclick="loadPreset('multi',this)">Multi-Instance</button>
+	          <button class="tb-btn" id="pWFG"      onclick="loadPreset('wfg',this)">Wait-For Graph</button>
+	          <div class="tb-sep"></div>
+	          <button class="tb-btn" onclick="loadCustomExample()">Custom Example</button>
+	          <button class="tb-btn" style="color:var(--green)" onclick="runRAGDetect()">▶ Run Detection</button>
+	        </div>
+	        <canvas id="ragCanvas" width="600" height="380"></canvas>
         <div class="legend-row">
           <div class="leg-item">
             <div class="leg-circle" style="border-color:var(--accent)"></div>Process Node
@@ -1167,14 +1203,29 @@ pre.code-body {
           </div>
           <div class="leg-item">
             <div class="leg-line" style="border-color:var(--red)"></div>Request (P→R)
-          </div>
-        </div>
-      </div>
+	        </div>
+	      </div>
+	      <div class="custom-graph">
+	        <div class="card-title" style="margin-bottom:10px">Custom Cycle Input</div>
+	        <textarea id="customGraphInput" class="custom-graph-input" spellcheck="false" placeholder="Example: P1->R1, R1->P2, P2->R2, R2->P1"></textarea>
+	        <div class="flex gap-8 mt-12">
+	          <button class="btn btn-primary btn-sm" onclick="buildCustomGraph()">Build Graph</button>
+	          <button class="btn btn-outline btn-sm" onclick="loadCustomExample()">Load Example</button>
+	        </div>
+	        <div class="input-hint">
+	          Use request edges as P-&gt;R and allocation edges as R-&gt;P. For Wait-For Graph input, use P-&gt;P.
+	        </div>
+	      </div>
+	    </div>
     </div>
     <div class="rag-side">
       <div class="state-card">
         <div class="card-title" style="margin-bottom:8px">Graph State</div>
         <div id="ragStateRows"></div>
+      </div>
+      <div class="state-card">
+        <div class="card-title" style="margin-bottom:8px">Detection Report</div>
+        <div id="ragReportRows"></div>
       </div>
       <div class="log-box" style="flex:1">
         <div class="log-header"><div class="log-pulse"></div>Detection Log</div>
@@ -1227,6 +1278,14 @@ pre.code-body {
     <div class="card-title mb-12">Step-by-Step Trace</div>
     <div class="step-log" id="bankerStepLog">
       <span style="color:var(--muted)">Waiting for execution...</span>
+    </div>
+  </div>
+
+  <div class="card mt-12">
+    <div class="card-title mb-12">System State Report</div>
+    <div id="bankerReportRows">
+      <div class="state-row"><span class="state-key">Status</span><span class="state-val">Waiting for analysis</span></div>
+      <div class="state-row"><span class="state-key">Recovery</span><span class="state-val">Run safety algorithm</span></div>
     </div>
   </div>
 </div>
@@ -1601,17 +1660,186 @@ const PRESETS = {
 };
 
 let curPreset = PRESETS.deadlock;
+let curPresetName = 'deadlock';
 
 function initRAG() {
   loadPreset('deadlock', document.getElementById('pDeadlock'));
+}
+
+function loadCustomExample() {
+  document.getElementById('customGraphInput').value =
+    'P1->R1, R1->P2, P2->R2, R2->P3, P3->R3, R3->P1';
+  buildCustomGraph();
+}
+
+function buildCustomGraph() {
+  const input = document.getElementById('customGraphInput').value.trim();
+  clearLog('ragLog');
+
+  if (!input) {
+    rlog('ragLog', '[ERROR] Enter edges first. Example: P1->R1, R1->P2, P2->R2, R2->P1', 'l-error');
+    return;
+  }
+
+  try {
+    document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
+    curPreset = parseCustomGraph(input);
+    curPresetName = 'custom';
+    drawRAG();
+    updateRAGState();
+    updateRAGReport(false);
+    rlog('ragLog', '[INPUT] Custom graph loaded from user edge list.', 'l-info');
+    rlog('ragLog', `[BUILD] Processes=${curPreset.procs.length}, resources=${curPreset.ress.length}, edges=${curPreset.edges.length}`, 'l-muted');
+    if (curPreset.hasDeadlock) {
+      rlog('ragLog', `[DEAD] Cycle detected: ${curPreset.cycle}`, 'l-error');
+    } else {
+      rlog('ragLog', '[OK]   No cycle detected in custom graph.', 'l-ok');
+    }
+  } catch (err) {
+    rlog('ragLog', `[ERROR] ${err.message}`, 'l-error');
+  }
+}
+
+function parseCustomGraph(input) {
+  const processIds = new Set();
+  const resourceIds = new Set();
+  const edges = [];
+
+  input
+    .split(/[\n,;]+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .forEach(part => {
+      const edgeText = part.replace(/[→⟶⇒]/g, '->').replace(/\s+/g, '');
+      const pieces = edgeText.split('->');
+      if (pieces.length !== 2 || !pieces[0] || !pieces[1]) {
+        throw new Error(`Invalid edge "${part}". Use format P1->R1 or R1->P2.`);
+      }
+
+      const from = pieces[0].toUpperCase();
+      const to = pieces[1].toUpperCase();
+      const fromType = nodeType(from);
+      const toType = nodeType(to);
+
+      if (fromType === 'resource' && toType === 'resource') {
+        throw new Error(`Invalid edge "${part}". Resource-to-resource edges are not valid in RAG/WFG.`);
+      }
+
+      if (fromType === 'process') processIds.add(from);
+      if (toType === 'process') processIds.add(to);
+      if (fromType === 'resource') resourceIds.add(from);
+      if (toType === 'resource') resourceIds.add(to);
+
+      edges.push({
+        f: from,
+        t: to,
+        tp: fromType === 'resource' && toType === 'process' ? 'alloc' : 'req',
+      });
+    });
+
+  if (edges.length === 0) {
+    throw new Error('At least one edge is required.');
+  }
+
+  const procs = placeNodes([...processIds].sort(), 'process');
+  const ress = placeNodes([...resourceIds].sort(), 'resource').map(resource => {
+    const used = edges.filter(edge => edge.tp === 'alloc' && edge.f === resource.id).length;
+    return {...resource, used, inst: Math.max(1, used)};
+  });
+  const preset = {
+    procs,
+    ress,
+    edges,
+    hasDeadlock: false,
+    cycle: '',
+  };
+  const result = detectGraphCycle(preset);
+  preset.hasDeadlock = result.found;
+  preset.cycle = result.cycle.join('→');
+  const deadSet = new Set(result.cycle.filter(id => id.startsWith('P')));
+  preset.procs = preset.procs.map(p => ({...p, dead: deadSet.has(p.id)}));
+  return preset;
+}
+
+function nodeType(label) {
+  if (/^P\d+$/i.test(label)) return 'process';
+  if (/^R\d+$/i.test(label)) return 'resource';
+  throw new Error(`Unknown node "${label}". Use process labels like P1 and resource labels like R1.`);
+}
+
+function placeNodes(ids, type) {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radius = type === 'process' ? 150 : 76;
+  const offset = type === 'process' ? -Math.PI / 2 : 0;
+
+  if (ids.length === 1) {
+    const x = type === 'process' ? cx - 130 : cx + 130;
+    return [{id: ids[0], x, y: cy, dead: false, inst: 1, used: 0}];
+  }
+
+  return ids.map((id, i) => {
+    const angle = offset + (Math.PI * 2 * i / ids.length);
+    const base = {
+      id,
+      x: Math.round(cx + Math.cos(angle) * radius),
+      y: Math.round(cy + Math.sin(angle) * radius),
+    };
+    return type === 'process'
+      ? {...base, dead: false}
+      : {...base, inst: 1, used: 0};
+  });
+}
+
+function detectGraphCycle(preset) {
+  const nodes = [...preset.procs.map(p=>p.id), ...preset.ress.map(r=>r.id)];
+  const adj = Object.fromEntries(nodes.map(id => [id, []]));
+  preset.edges.forEach(edge => {
+    if (!adj[edge.f] || !adj[edge.t]) {
+      throw new Error(`Edge ${edge.f}->${edge.t} references an unknown node.`);
+    }
+    adj[edge.f].push(edge.t);
+  });
+
+  const color = Object.fromEntries(nodes.map(id => [id, 0]));
+  const path = [];
+
+  function dfs(node) {
+    color[node] = 1;
+    path.push(node);
+    for (const next of adj[node]) {
+      if (color[next] === 1) {
+        const start = path.indexOf(next);
+        return path.slice(start).concat(next);
+      }
+      if (color[next] === 0) {
+        const cycle = dfs(next);
+        if (cycle) return cycle;
+      }
+    }
+    path.pop();
+    color[node] = 2;
+    return null;
+  }
+
+  for (const node of nodes) {
+    if (color[node] === 0) {
+      const cycle = dfs(node);
+      if (cycle) return {found: true, cycle};
+    }
+  }
+
+  return {found: false, cycle: []};
 }
 
 function loadPreset(name, btn) {
   document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   curPreset = PRESETS[name];
+  curPresetName = name;
   drawRAG();
   updateRAGState();
+  updateRAGReport(false);
   clearLog('ragLog');
   rlog('ragLog', `[INIT] Loaded preset: ${name}`, 'l-info');
   if (curPreset.hasDeadlock) {
@@ -1635,9 +1863,11 @@ function runRAGDetect() {
     if (curPreset.hasDeadlock) {
       rlog('ragLog', `[BACK] Back-edge found — cycle confirmed`, 'l-warn');
       rlog('ragLog', `[DEAD] Deadlock: ${curPreset.cycle}`, 'l-error');
+      updateRAGReport(true);
     } else {
       rlog('ragLog', `[OK]   DFS complete — no back-edges found`, 'l-ok');
       rlog('ragLog', `[SAFE] System is in a SAFE state`, 'l-ok');
+      updateRAGReport(true);
     }
   }, procs.length * 120 + 100);
 }
@@ -1653,6 +1883,34 @@ function updateRAGState() {
       : '<span style="color:var(--green)">SAFE ✓</span>'],
   ];
   document.getElementById('ragStateRows').innerHTML = rows.map(([k,v]) =>
+    `<div class="state-row"><span class="state-key">${k}</span><span class="state-val">${v}</span></div>`
+  ).join('');
+}
+
+function updateRAGReport(confirmed) {
+  const dead = curPreset.procs.filter(p=>p.dead).map(p=>p.id);
+  const reqResources = [...new Set(curPreset.edges
+    .filter(e=>e.tp === 'req' && e.t.startsWith('R'))
+    .map(e=>e.t))];
+  const isMultiInstance = curPreset.ress.some(r=>r.inst > 1);
+  const confidence = confirmed ? 'Detection run completed' : 'Preset loaded';
+  const recommendation = curPreset.hasDeadlock
+    ? (isMultiInstance
+      ? 'Confirm using matrix detection, then apply priority victim or preemption'
+      : 'Break cycle with priority victim or resource preemption')
+    : 'No recovery needed';
+  const rows = [
+    ['Method', curPresetName === 'wfg' || curPreset.ress.length === 0 ? 'Wait-For Graph DFS' : 'RAG cycle detection'],
+    ['Result', curPreset.hasDeadlock
+      ? '<span style="color:var(--red)">Deadlock detected</span>'
+      : '<span style="color:var(--green)">Stable state</span>'],
+    ['Processes', dead.length ? dead.join(', ') : 'None'],
+    ['Resources', reqResources.length ? reqResources.join(', ') : 'None'],
+    ['Cycle', curPreset.cycle || 'No cycle'],
+    ['Action', recommendation],
+    ['Trace', confidence],
+  ];
+  document.getElementById('ragReportRows').innerHTML = rows.map(([k,v]) =>
     `<div class="state-row"><span class="state-key">${k}</span><span class="state-val">${v}</span></div>`
   ).join('');
 }
@@ -1881,6 +2139,7 @@ function initBanker() {
   document.getElementById('bankerResultTag').style.color = '';
   document.getElementById('bankerStepLog').innerHTML =
     '<span style="color:var(--muted)">Waiting for execution...</span>';
+  updateBankerReport(null, [], []);
 }
 
 function runBanker() {
@@ -1914,6 +2173,7 @@ function runBanker() {
     }
   }
 
+  const stuck = [...Array(n).keys()].filter(i=>!fin[i]).map(i=>'P'+i);
   const isSafe = seq.length === n;
   const tag = document.getElementById('bankerResultTag');
   tag.textContent = isSafe ? '✓ SAFE STATE' : '✗ UNSAFE STATE';
@@ -1937,11 +2197,36 @@ function runBanker() {
     log.push({msg:`✓ SAFE SEQUENCE: <${seq.map(p=>'P'+p).join(' → ')}>`, cls:'step-ok'});
   } else {
     seqDiv.innerHTML = '<span style="color:var(--red);font-family:var(--mono);font-size:11px">⚠ System is in an UNSAFE state!</span>';
-    log.push({msg:`✗ UNSAFE — stuck: {${[...Array(n).keys()].filter(i=>!fin[i]).map(i=>'P'+i).join(', ')}}`, cls:'step-bad'});
+    log.push({msg:`✗ UNSAFE — stuck: {${stuck.join(', ')}}`, cls:'step-bad'});
   }
 
   const logDiv = document.getElementById('bankerStepLog');
   logDiv.innerHTML = log.map(l=>`<div class="${l.cls}">${l.msg}</div>`).join('');
+  updateBankerReport(isSafe, seq.map(p=>'P'+p), stuck);
+}
+
+function updateBankerReport(isSafe, sequence, stuck) {
+  const rows = isSafe === null
+    ? [
+      ['Status', 'Waiting for analysis'],
+      ['Safe Sequence', 'Not calculated'],
+      ['At Risk', 'Run safety algorithm'],
+      ['Recommendation', 'Enter allocation, maximum need, and available resources'],
+    ]
+    : [
+      ['Status', isSafe
+        ? '<span style="color:var(--green)">Safe state</span>'
+        : '<span style="color:var(--red)">Unsafe state</span>'],
+      ['Safe Sequence', sequence.length ? `<${sequence.join(' -> ')}>` : 'None'],
+      ['At Risk', stuck.length ? stuck.join(', ') : 'None'],
+      ['Recommendation', isSafe
+        ? 'Grant requests only if this safe sequence remains possible'
+        : 'Deny risky requests and wait for resources to be released'],
+    ];
+
+  document.getElementById('bankerReportRows').innerHTML = rows.map(([k,v]) =>
+    `<div class="state-row"><span class="state-key">${k}</span><span class="state-val">${v}</span></div>`
+  ).join('');
 }
 
 // ══════════════════════════════════════════════════════

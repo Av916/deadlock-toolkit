@@ -8,6 +8,7 @@ deadlock_toolkit/
 ├── deadlock_detector.py   # Core algorithms: WFG DFS, multi-instance, Banker's
 ├── rag.py                 # Resource Allocation Graph model & cycle detection
 ├── recovery.py            # 7 recovery strategies
+├── analysis.py            # High-level reports and recovery recommendations
 ├── test_all.py            # Complete test suite (run this to verify)
 └── index.html             # Interactive visual toolkit (open in browser)
 ```
@@ -16,10 +17,22 @@ deadlock_toolkit/
 
 ```bash
 # No external packages needed — pure stdlib
-python test_all.py
+python3 test_all.py
 ```
 
 ## Quick Usage
+
+```python
+# Full system-state analysis report
+from analysis import analyze_system_state
+report = analyze_system_state(
+    allocation = [[1,0],[0,1]],
+    request    = [[0,1],[1,0]],
+    available  = [0,0],
+    process_names = ["Compiler", "Linker"],
+    resource_names = ["Printer", "Disk"])
+print(report.to_text())
+```
 
 ```python
 # Banker's Algorithm
@@ -58,6 +71,14 @@ print('\n'.join(log))
 
 Just open `index.html` in any browser — no server required.
 
+The RAG page also accepts custom user input. Enter edges like:
+
+```text
+P1->R1, R1->P2, P2->R2, R2->P1
+```
+
+Then click **Build Graph** and **Run Detection** to test your own cycle.
+
 ## Algorithms
 
 | Algorithm | File | Complexity |
@@ -67,6 +88,7 @@ Just open `index.html` in any browser — no server required.
 | Banker's Safety Algorithm | deadlock_detector.py | O(n²m) |
 | RAG Cycle Detection | rag.py | O(V+E) |
 | WFG Projection from RAG | rag.py | O(E²) |
+| Analysis Report Generation | analysis.py | O(n²m) or O(V+E) |
 
 ## Recovery Strategies
 
@@ -79,3 +101,14 @@ Just open `index.html` in any browser — no server required.
 | `wait_die` | Timestamp: older waits, younger dies |
 | `wound_wait` | Timestamp: older wounds younger |
 | `priority_victim` | Cost-function victim selection |
+
+## Improvements Added
+
+- Resource Allocation Graph visualization with highlighted deadlock cycles
+- User input for custom RAG/Wait-For Graph cycle detection
+- Multi-instance system-state analysis using allocation/request/available matrices
+- Banker's Algorithm safe-state checking and safe sequence generation
+- Report generation with deadlocked processes, resources, diagnosis, and recovery recommendation
+- Multiple recovery options: termination, one-by-one termination, preemption, rollback, Wait-Die, Wound-Wait, and priority victim selection
+- Prevention vs avoidance vs detection comparison for OS viva/project explanation
+- Interactive browser UI with RAG, Banker, detection, and recovery simulation views

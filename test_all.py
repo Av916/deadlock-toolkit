@@ -319,6 +319,73 @@ except Exception as e:
     fail("Terminate all: kill count", str(e))
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 6. High-Level Analysis Reports
+# ══════════════════════════════════════════════════════════════════════════════
+header("Analysis Reports")
+
+from analysis import (
+    analyze_system_state,
+    analyze_resource_allocation_graph,
+    compare_deadlock_methods,
+)
+
+try:
+    report = analyze_system_state(
+        allocation=[[1,0],[0,1]],
+        request=[[0,1],[1,0]],
+        available=[0,0],
+        process_names=["Compiler", "Linker"],
+        resource_names=["Printer", "Disk"],
+    )
+    assert report.deadlock_found
+    assert set(report.deadlocked_processes) == {"Compiler", "Linker"}
+    assert set(report.deadlocked_resources) == {"Printer", "Disk"}
+    assert report.recommended_strategy == "priority_victim"
+    assert "Deadlock Analysis Report" in report.to_text()
+    ok("System-state report: detects deadlock and recommends recovery")
+except Exception as e:
+    fail("System-state report deadlock", str(e))
+
+try:
+    report = analyze_system_state(
+        allocation=[[0,1,0],[2,0,0],[3,0,2],[2,1,1],[0,0,2]],
+        request=[[7,4,3],[1,2,2],[6,0,0],[0,1,1],[4,3,1]],
+        available=[3,3,2],
+        max_need=[[7,5,3],[3,2,2],[9,0,2],[2,2,2],[4,3,3]],
+    )
+    assert not report.deadlock_found
+    assert report.is_safe_state
+    assert len(report.safe_sequence) == 5
+    ok("System-state report: includes Banker's safe sequence")
+except Exception as e:
+    fail("System-state report safe sequence", str(e))
+
+try:
+    graph_report = analyze_resource_allocation_graph(make_deadlock_example())
+    assert graph_report.deadlock_found
+    assert set(graph_report.deadlocked_processes) == {"P1", "P2", "P3"}
+    assert graph_report.cycle
+    ok("RAG report: returns cycle, processes, and recommendation")
+except Exception as e:
+    fail("RAG report", str(e))
+
+try:
+    methods = compare_deadlock_methods()
+    names = {item["method"] for item in methods}
+    assert names == {"Prevention", "Avoidance", "Detection and Recovery"}
+    ok("Deadlock method comparison: prevention/avoidance/detection covered")
+except Exception as e:
+    fail("Deadlock method comparison", str(e))
+
+try:
+    analyze_system_state([[1, -1]], [[0, 0]], [0, 0])
+    fail("Report validation: negative values should raise ValueError")
+except ValueError:
+    ok("Report validation: rejects negative matrix values")
+except Exception as e:
+    fail("Report validation error type", str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Summary
 # ══════════════════════════════════════════════════════════════════════════════
 total = passed + failed
