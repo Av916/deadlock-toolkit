@@ -656,6 +656,28 @@ table.matrix {
   text-align: center;
 }
 
+.banker-input {
+  width: 24px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: center;
+  border-radius: 3px;
+  padding: 4px 0;
+  transition: border-color 0.2s;
+}
+.banker-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.banker-input::-webkit-inner-spin-button, 
+.banker-input::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
 .avail-label {
   font-size: 9px;
   color: var(--muted);
@@ -1187,7 +1209,7 @@ pre.code-body {
       <div class="avail-row" id="availRow"></div>
       <div class="flex gap-8 mt-12">
         <button class="btn btn-primary" onclick="runBanker()">▶ Run Safety Algorithm</button>
-        <button class="btn btn-outline" onclick="initBanker()">Reset</button>
+        <button class="btn btn-outline" onclick="resetBanker()">Reset</button>
       </div>
     </div>
     <div class="card">
@@ -1765,21 +1787,67 @@ function drawRAG() {
 // ══════════════════════════════════════════════════════
 // BANKER'S
 // ══════════════════════════════════════════════════════
-const BD = {
+const BD_INITIAL = {
   alloc: [[0,1,0],[2,0,0],[3,0,2],[2,1,1],[0,0,2]],
   max:   [[7,5,3],[3,2,2],[9,0,2],[2,2,2],[4,3,3]],
   avail: [3,3,2]
 };
 
+let BD = {
+  alloc: [], max: [], avail: []
+};
+
+function resetBanker() {
+  BD.alloc = BD_INITIAL.alloc.map(r=>[...r]);
+  BD.max = BD_INITIAL.max.map(r=>[...r]);
+  BD.avail = [...BD_INITIAL.avail];
+  initBanker();
+}
+
+function updateBankerNeed() {
+  const n = BD.alloc.length;
+  const m = BD.avail.length;
+  for(let i=0; i<n; i++) {
+    for(let j=0; j<m; j++) {
+      const allocInp = document.getElementById(`alloc_${i}_${j}`);
+      const maxInp = document.getElementById(`max_${i}_${j}`);
+      if(allocInp) BD.alloc[i][j] = parseInt(allocInp.value) || 0;
+      if(maxInp) BD.max[i][j] = parseInt(maxInp.value) || 0;
+    }
+  }
+  for(let j=0; j<m; j++) {
+    const avInp = document.getElementById(`avail_${j}`);
+    if(avInp) BD.avail[j] = parseInt(avInp.value) || 0;
+  }
+  
+  const need = BD.alloc.map((r,i) => r.map((v,j) => BD.max[i][j]-v));
+  const tNeed = document.getElementById('tNeed');
+  for(let i=0; i<n; i++) {
+    for(let j=0; j<m; j++) {
+      if (tNeed.rows[i+1] && tNeed.rows[i+1].cells[j+1]) {
+        const c = tNeed.rows[i+1].cells[j+1];
+        const val = need[i][j];
+        c.textContent = val;
+        c.className = val < 0 ? 'hl-red' : '';
+      }
+    }
+  }
+}
+
 function initBanker() {
+  if (BD.alloc.length === 0) {
+    BD.alloc = BD_INITIAL.alloc.map(r=>[...r]);
+    BD.max = BD_INITIAL.max.map(r=>[...r]);
+    BD.avail = [...BD_INITIAL.avail];
+  }
   const procs = ['P0','P1','P2','P3','P4'];
   const need  = BD.alloc.map((r,i) => r.map((v,j) => BD.max[i][j]-v));
 
   [
-    {id:'tAlloc',data:BD.alloc},
-    {id:'tMax',  data:BD.max},
-    {id:'tNeed', data:need},
-  ].forEach(({id,data}) => {
+    {id:'tAlloc',data:BD.alloc, editPrefix:'alloc'},
+    {id:'tMax',  data:BD.max, editPrefix:'max'},
+    {id:'tNeed', data:need, editPrefix:null},
+  ].forEach(({id,data,editPrefix}) => {
     const t = document.getElementById(id);
     while (t.rows.length > 1) t.deleteRow(1);
     data.forEach((row, i) => {
@@ -1789,8 +1857,12 @@ function initBanker() {
       td.className   = 'proc-id';
       row.forEach((v,j) => {
         let c = tr.insertCell();
-        c.textContent = v;
-        if (id==='tNeed' && v < 0) c.className='hl-red';
+        if (editPrefix) {
+          c.innerHTML = `<input type="number" min="0" value="${v}" id="${editPrefix}_${i}_${j}" class="banker-input" oninput="updateBankerNeed()" />`;
+        } else {
+          c.textContent = v;
+          if (v < 0) c.className='hl-red';
+        }
       });
     });
   });
@@ -1799,7 +1871,7 @@ function initBanker() {
   avRow.innerHTML = ['A','B','C'].map((r,i) => `
     <div style="flex:1">
       <div class="avail-label">${r}</div>
-      <div class="avail-chip" id="av${r}">${BD.avail[i]}</div>
+      <div class="avail-chip" style="padding:4px"><input type="number" min="0" id="avail_${i}" value="${BD.avail[i]}" class="banker-input" style="width:100%;font-size:13px;font-weight:600;background:transparent;border:none" oninput="updateBankerNeed()" /></div>
     </div>
   `).join('');
 
